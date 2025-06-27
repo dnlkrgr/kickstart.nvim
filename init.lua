@@ -102,7 +102,7 @@ vim.g.have_nerd_font = false
 vim.opt.number = true
 -- You can also add relative line numbers, to help with jumping.
 --  Experiment for yourself to see if you like it!
--- vim.opt.relativenumber = true
+vim.opt.relativenumber = true
 
 -- Enable mouse mode, can be useful for resizing splits for example!
 vim.opt.mouse = 'a'
@@ -126,7 +126,10 @@ vim.opt.undofile = true
 
 -- Case-insensitive searching UNLESS \C or one or more capital letters in the search term
 vim.opt.ignorecase = true
-vim.opt.smartcase = true
+vim.opt.wildignorecase = true 
+vim.opt.smartcase = false     
+
+
 
 -- Keep signcolumn on by default
 vim.opt.signcolumn = 'yes'
@@ -157,6 +160,13 @@ vim.opt.cursorline = true
 -- Minimal number of screen lines to keep above and below the cursor.
 vim.opt.scrolloff = 10
 
+vim.filetype.add {
+  extension = {
+    lsh = 'lua',
+    cnf = 'dosini'
+  },
+}
+
 -- [[ Basic Keymaps ]]
 --  See `:help vim.keymap.set()`
 
@@ -166,6 +176,10 @@ vim.keymap.set('n', '<Esc>', '<cmd>nohlsearch<CR>')
 
 -- Diagnostic keymaps
 vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagnostic [Q]uickfix list' })
+
+vim.api.nvim_set_keymap('n', '<C-s>', ':w<CR>', { noremap = true, silent = true })
+vim.api.nvim_set_keymap('i', '<C-s>', '<Esc>:w<CR>a', { noremap = true, silent = true })
+
 
 -- Exit terminal mode in the builtin terminal with a shortcut that is a bit easier
 -- for people to discover. Otherwise, you normally need to press <C-\><C-n>, which
@@ -204,6 +218,19 @@ vim.api.nvim_create_autocmd('TextYankPost', {
   end,
 })
 
+-- Set indentation options for Lua and .lsh files
+vim.api.nvim_create_autocmd('FileType', {
+  pattern = { 'lua', 'lsh' },
+  callback = function()
+    vim.bo.expandtab = true -- Use spaces instead of tabs
+    vim.bo.shiftwidth = 4 -- Number of spaces for each indentation level
+    vim.bo.tabstop = 4 -- Number of spaces that a <Tab> counts for
+    vim.bo.softtabstop = 4 -- Number of spaces for editing operations
+  end,
+})
+
+
+
 -- [[ Install `lazy.nvim` plugin manager ]]
 --    See `:help lazy.nvim.txt` or https://github.com/folke/lazy.nvim for more info
 local lazypath = vim.fn.stdpath 'data' .. '/lazy/lazy.nvim'
@@ -229,14 +256,56 @@ vim.opt.rtp:prepend(lazypath)
 -- NOTE: Here is where you install your plugins.
 require('lazy').setup({
   -- NOTE: Plugins can be added with a link (or for a github repo: 'owner/repo' link).
-  'tpope/vim-sleuth', -- Detect tabstop and shiftwidth automatically
+  -- 'tpope/vim-sleuth', -- Detect tabstop and shiftwidth automatically
 
   -- NOTE: Plugins can also be added by using a table,
   -- with the first argument being the link and the following
   -- keys can be used to configure plugin behavior/loading/etc.
   --
   -- Use `opts = {}` to force a plugin to be loaded.
-  --
+
+
+  -- *** MY PLUGINS ***
+  {
+    "sickill/vim-monokai",  -- Plugin repository for the Monokai colorscheme
+    lazy = false,           -- Ensure it loads at startup (optional, but useful for a colorscheme)
+    priority = 1000,        -- High priority so it loads before other plugins that might depend on colors
+    config = function()
+      -- Set the colorscheme once the plugin is loaded:
+      vim.cmd("colorscheme monokai")
+    end,
+  },
+
+
+    -- add this to your lua/plugins.lua, lua/plugins/init.lua,  or the file you keep your other plugins:
+  {
+      'numToStr/Comment.nvim',
+      opts = {
+          -- add any options here
+      },
+      config = function(_, opts)
+        require("Comment").setup(opts)
+        -- Remap `gc` in normal mode to toggle comment on the current line (like `gcc`)
+        vim.keymap.set("n", "gc", function()
+          require("Comment.api").toggle.linewise.current()
+        end, { silent = true, desc = "Toggle comment on current line" })
+
+        vim.keymap.set("n", "<C-_>", function()
+          require("Comment.api").toggle.linewise.current()
+        end, { silent = true, desc = "Toggle comment on current line" })
+
+
+        vim.keymap.set("x", "<C-_>", "<Plug>(comment_toggle_linewise_visual)", { silent = true, desc = "Toggle comment (visual)" })
+
+      end,
+
+  },
+
+  
+
+  
+
+
 
   -- Here is a more advanced example where we pass configuration
   -- options to `gitsigns.nvim`. This is equivalent to the following Lua:
@@ -620,12 +689,19 @@ require('lazy').setup({
 
         lua_ls = {
           -- cmd = {...},
-          -- filetypes = { ...},
+          -- filetypes = { '.lsh' },
           -- capabilities = {},
           settings = {
             Lua = {
               completion = {
                 callSnippet = 'Replace',
+              },
+              format = {
+                enable = true,
+                defaultConfig = {
+                  indent_style = 'space',
+                  indent_size = '4', -- Or your preferred number of spaces
+                },
               },
               -- You can toggle below to ignore Lua_LS's noisy `missing-fields` warnings
               -- diagnostics = { disable = { 'missing-fields' } },
@@ -681,29 +757,7 @@ require('lazy').setup({
     },
     opts = {
       notify_on_error = false,
-      format_on_save = function(bufnr)
-        -- Disable "format_on_save lsp_fallback" for languages that don't
-        -- have a well standardized coding style. You can add additional
-        -- languages here or re-enable it for the disabled ones.
-        local disable_filetypes = { c = true, cpp = true }
-        local lsp_format_opt
-        if disable_filetypes[vim.bo[bufnr].filetype] then
-          lsp_format_opt = 'never'
-        else
-          lsp_format_opt = 'fallback'
-        end
-        return {
-          timeout_ms = 500,
-          lsp_format = lsp_format_opt,
-        }
-      end,
       formatters_by_ft = {
-        lua = { 'stylua' },
-        -- Conform can also run multiple formatters sequentially
-        -- python = { "isort", "black" },
-        --
-        -- You can use 'stop_after_first' to run the first available formatter from the list
-        -- javascript = { "prettierd", "prettier", stop_after_first = true },
       },
     },
   },
@@ -908,6 +962,7 @@ require('lazy').setup({
     --    - Treesitter + textobjects: https://github.com/nvim-treesitter/nvim-treesitter-textobjects
   },
 
+
   -- The following two comments only work if you have downloaded the kickstart repo, not just copy pasted the
   -- init.lua. If you want these files, they are in the repository, so you can just download them and
   -- place them in the correct locations.
@@ -952,5 +1007,17 @@ require('lazy').setup({
   },
 })
 
+
+
+vim.opt.foldmethod = "expr"
+vim.opt.foldexpr = "nvim_treesitter#foldexpr()"
+vim.opt.foldenable = true
 -- The line beneath this is called `modeline`. See `:help modeline`
 -- vim: ts=2 sts=2 sw=2 et
+
+vim.opt.expandtab = true     -- Use spaces instead of tabs when editing
+vim.opt.shiftwidth = 4       -- Number of spaces to use for each step of (auto)indent
+vim.opt.tabstop = 4          -- Number of spaces that a <Tab> in the file counts for
+
+-- vim.treesitter.language.register('markdown', 'markdown')
+-- vim.treesitter.language.register('markdown_inline', 'markdown')
