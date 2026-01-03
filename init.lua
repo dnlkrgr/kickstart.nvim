@@ -910,6 +910,30 @@ require('lazy').setup({
             -- - sr)'  - [S]urround [R]eplace [)] [']
             require('mini.surround').setup()
 
+
+            -- utils: get current Lua function name under cursor
+            local function current_lua_func_name()
+              local ts_utils = require 'nvim-treesitter.ts_utils'
+              local node = ts_utils.get_node_at_cursor()
+              if not node then return nil end
+
+              while node do
+                local t = node:type()
+                -- Lua named function statements:
+                --   function_declaration  -> function PipeTransferSend:initPipeTransfer(...) end
+                --   local_function        -> local function initPipeTransfer(...) end
+                if t == 'function_declaration' or t == 'local_function' then
+                  local name_nodes = node:field('name')  -- includes dotted/colon paths
+                  if name_nodes and name_nodes[1] then
+                    return vim.treesitter.get_node_text(name_nodes[1], 0)
+                  end
+                  return '[anonymous function]'
+                end
+                node = node:parent()
+              end
+              return nil
+            end
+
             -- Simple and easy statusline.
             --  You could remove this setup call if you don't like it,
             --  and try some other statusline plugin
@@ -923,6 +947,17 @@ require('lazy').setup({
             ---@diagnostic disable-next-line: duplicate-set-field
             statusline.section_location = function()
                 return '%2l:%-2v'
+            end
+
+
+            statusline.section_filename = function()
+              if vim.bo.filetype == 'lua' then
+                local fn = current_lua_func_name()
+                if fn and #fn > 0 then
+                  return fn
+                end
+              end
+              return vim.fn.expand('%:t') -- fallback
             end
 
             -- ... and there is more!
@@ -943,7 +978,7 @@ require('lazy').setup({
                 -- Some languages depend on vim's regex highlighting system (such as Ruby) for indent rules.
                 --  If you are experiencing weird indenting issues, add the language to
                 --  the list of additional_vim_regex_highlighting and disabled languages for indent.
-                additional_vim_regex_highlighting = { 'ruby' },
+                additional_vim_regex_highlighting = { 'ruby', 'markdown' },
             },
             indent = { enable = true, disable = { 'ruby' } },
         },
